@@ -1,6 +1,8 @@
 import cssText from "data-text:~/styles.css"
 
-import { useStorage } from "@plasmohq/storage/hook"
+import { sendToBackground } from "@plasmohq/messaging"
+
+import { useEffect, useRef, useState } from "~node_modules/@types/react"
 
 export const getStyle = () => {
   const style = document.createElement("style")
@@ -9,7 +11,36 @@ export const getStyle = () => {
 }
 
 function AskLlmUi() {
-  const [enabled, setEnabled] = useStorage(false)
+  const [select, setSelect] = useState("")
+  const lastTextRef = useRef("")
+  const timeoutRef = useRef(null)
+
+  const handleSelection = () => {
+    clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      const selection = window.getSelection()
+      const text = selection ? selection.toString().trim() : ""
+      if (text && text !== lastTextRef.current) {
+        lastTextRef.current = text
+        setSelect(text)
+      }
+    }, 200)
+  }
+  const handleClick = async () => {
+    if (select) {
+      await sendToBackground({
+        name: "ask-llm",
+        body: select
+      })
+    }
+  }
+
+  useEffect(() => {
+    document.addEventListener("selectionchange", handleSelection)
+    return () => {
+      document.removeEventListener("selectionchange", handleSelection)
+    }
+  }, [])
 
   return (
     <>
@@ -26,14 +57,14 @@ function AskLlmUi() {
           }}>
           <div>
             <div
-             onClick={() => setEnabled(!enabled)}
-            
-            style={{ 
-                
-                fontSize: 14, 
-                fontWeight: 500, 
-                cursor: "pointer",
-                }}>Ask LLM</div>
+              onClick={handleClick}
+              style={{
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: "pointer"
+              }}>
+              Ask LLM
+            </div>
           </div>
         </div>
       </div>
