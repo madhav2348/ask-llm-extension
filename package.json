@@ -27,11 +27,13 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://localhost/*"
     ],
     "permissions": [
       "activeTab",
-      "scripting"
+      "scripting",
+      "storage"
     ]
   }
 }

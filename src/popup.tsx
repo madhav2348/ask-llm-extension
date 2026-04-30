@@ -48,8 +48,7 @@
 
 // export default IndexPopup
 import cssText from "data-text:~/styles.css"
-
-import { useStorage } from "@plasmohq/storage/hook"
+import { useEffect, useState } from "react"
 
 export const getStyle = () => {
   const style = document.createElement("style")
@@ -58,7 +57,18 @@ export const getStyle = () => {
 }
 
 function IndexPopup() {
-  const [enabled, setEnabled] = useStorage(false)
+  const [enabled, setEnabledState] = useState(true)
+
+  useEffect(() => {
+    chrome.storage.local.get("askLlmEnabled").then((result) => {
+      setEnabledState(result.askLlmEnabled !== false)
+    })
+  }, [])
+
+  const setEnabled = async (value: boolean) => {
+    setEnabledState(value)
+    await chrome.storage.local.set({ askLlmEnabled: value })
+  }
 
   return (
     <>
