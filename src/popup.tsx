@@ -50,6 +50,12 @@
 import cssText from "data-text:~/styles.css"
 import { useEffect, useState } from "react"
 
+import {
+  type AskLlmHistoryItem,
+  clearAskLlmHistory,
+  getAskLlmHistory
+} from "~history"
+
 export const getStyle = () => {
   const style = document.createElement("style")
   style.textContent = cssText
@@ -58,11 +64,18 @@ export const getStyle = () => {
 
 function IndexPopup() {
   const [enabled, setEnabledState] = useState(true)
+  const [history, setHistory] = useState<AskLlmHistoryItem[]>([])
+
+  const refreshHistory = async () => {
+    setHistory(await getAskLlmHistory())
+  }
 
   useEffect(() => {
     chrome.storage.local.get("askLlmEnabled").then((result) => {
       setEnabledState(result.askLlmEnabled !== false)
     })
+
+    refreshHistory()
   }, [])
 
   const setEnabled = async (value: boolean) => {
@@ -70,24 +83,40 @@ function IndexPopup() {
     await chrome.storage.local.set({ askLlmEnabled: value })
   }
 
+  const handleClearHistory = async () => {
+    await clearAskLlmHistory()
+    setHistory([])
+  }
+
   return (
-    <>
-      <div style={{ padding: 0, margin: 0, minWidth: 300 }}>
+    <div
+      style={{
+        background: "#f8fafc",
+        color: "#111827",
+        fontFamily:
+          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        margin: 0,
+        minWidth: 340,
+        padding: 12
+      }}>
+      <div style={{ display: "grid", gap: 12 }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0.85rem 1rem",
-            backgroundColor: "#f5f5f5",
-            borderRadius: "8px",
-            gap: "48px"
+            padding: "12px 14px",
+            backgroundColor: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
+            gap: 24
           }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500 }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>
               Enable "Ask LLM"
             </div>
-            <div style={{ fontSize: 12, color: "#888" }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
               Query an AI model inline
             </div>
           </div>
@@ -119,14 +148,166 @@ function IndexPopup() {
                 }}
               />
             </div>
-            <span style={{ fontSize: 12, color: "#888", width: 20 }}>
+            <span style={{ fontSize: 12, color: "#64748b", width: 20 }}>
               {enabled ? "On" : "Off"}
             </span>
           </div>
         </div>
+
+        <section
+          style={{
+            backgroundColor: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
+            overflow: "hidden"
+          }}>
+          <div
+            style={{
+              alignItems: "center",
+              borderBottom: "1px solid #e5e7eb",
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "10px 12px"
+            }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>History</div>
+              <div style={{ color: "#64748b", fontSize: 12 }}>
+                Last {history.length} saved asks
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                onClick={refreshHistory}
+                style={iconButtonStyle}
+                title="Refresh history"
+                aria-label="Refresh history">
+                R
+              </button>
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                disabled={history.length === 0}
+                style={{
+                  ...iconButtonStyle,
+                  cursor: history.length === 0 ? "not-allowed" : "pointer",
+                  opacity: history.length === 0 ? 0.45 : 1
+                }}
+                title="Clear history"
+                aria-label="Clear history">
+                X
+              </button>
+            </div>
+          </div>
+
+          <div style={{ maxHeight: 360, overflowY: "auto" }}>
+            {history.length === 0 ? (
+              <div
+                style={{
+                  color: "#64748b",
+                  fontSize: 13,
+                  padding: 16,
+                  textAlign: "center"
+                }}>
+                Ask about selected text and it will appear here.
+              </div>
+            ) : (
+              history.map((item) => <HistoryItem key={item.id} item={item} />)
+            )}
+          </div>
+        </section>
       </div>
-    </>
+    </div>
   )
+}
+
+const iconButtonStyle = {
+  alignItems: "center",
+  background: "#f8fafc",
+  border: "1px solid #dbe3ee",
+  borderRadius: 6,
+  color: "#334155",
+  cursor: "pointer",
+  display: "inline-flex",
+  fontSize: 16,
+  fontWeight: 700,
+  height: 30,
+  justifyContent: "center",
+  lineHeight: 1,
+  padding: 0,
+  width: 30
+} as const
+
+function HistoryItem({ item }: { item: AskLlmHistoryItem }) {
+  const answer = item.error || item.answer || "No answer saved."
+  const host = getHostname(item.pageUrl)
+
+  return (
+    <article
+      style={{
+        borderBottom: "1px solid #edf2f7",
+        display: "grid",
+        gap: 7,
+        padding: "11px 12px"
+      }}>
+      <div
+        style={{
+          alignItems: "center",
+          color: "#64748b",
+          display: "flex",
+          fontSize: 11,
+          gap: 8,
+          justifyContent: "space-between"
+        }}>
+        <span
+          style={{
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }}
+          title={item.pageTitle || host}>
+          {item.pageTitle || host || "Saved ask"}
+        </span>
+        <time style={{ flexShrink: 0 }}>
+          {new Date(item.createdAt).toLocaleDateString(undefined, {
+            day: "numeric",
+            month: "short"
+          })}
+        </time>
+      </div>
+
+      <div style={{ color: "#111827", fontSize: 13, lineHeight: 1.35 }}>
+        {truncate(item.text, 120)}
+      </div>
+
+      <div
+        style={{
+          color: item.error ? "#991b1b" : "#475569",
+          fontSize: 12,
+          lineHeight: 1.4
+        }}>
+        {truncate(answer, 180)}
+      </div>
+    </article>
+  )
+}
+
+function truncate(value: string, limit: number) {
+  return value.length > limit ? `${value.slice(0, limit).trim()}...` : value
+}
+
+function getHostname(url?: string) {
+  if (!url) {
+    return ""
+  }
+
+  try {
+    return new URL(url).hostname
+  } catch {
+    return ""
+  }
 }
 
 export default IndexPopup

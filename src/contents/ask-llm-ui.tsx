@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { sendToBackground } from "@plasmohq/messaging"
 
+import { addAskLlmHistoryItem } from "~history"
+
 type AskLlmResponse = {
   answer?: string
   error?: string
@@ -135,6 +137,14 @@ function AskLlmUi() {
         }
       )
 
+      await addAskLlmHistoryItem({
+        answer: response.answer,
+        error: response.error,
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        text: bubble.selectedText
+      })
+
       setBubble((current) => ({
         ...current,
         answer: response.answer ?? "",
@@ -142,10 +152,19 @@ function AskLlmUi() {
         isLoading: false
       }))
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not ask the LLM."
+
+      await addAskLlmHistoryItem({
+        error: message,
+        pageTitle: document.title,
+        pageUrl: window.location.href,
+        text: bubble.selectedText
+      })
+
       setBubble((current) => ({
         ...current,
-        error:
-          error instanceof Error ? error.message : "Could not ask the LLM.",
+        error: message,
         isLoading: false
       }))
     }
