@@ -2,10 +2,10 @@ import cssText from "data-text:~/styles.css"
 import { useEffect, useState } from "react"
 
 import {
-  type AskLlmHistoryItem,
   clearAskLlmHistory,
-  getAskLlmHistory
-} from "~history"
+  getAskLlmHistory,
+  type AskLlmHistoryItem
+} from "./history"
 
 export const getStyle = () => {
   const style = document.createElement("style")
@@ -15,6 +15,9 @@ export const getStyle = () => {
 
 function IndexPopup() {
   const [enabled, setEnabledState] = useState(true)
+  const [apiKey, setApiKey] = useState("")
+  const [apiKeySaved, setApiKeySaved] = useState(false)
+  const [apiKeyStatus, setApiKeyStatus] = useState("")
   const [history, setHistory] = useState<AskLlmHistoryItem[]>([])
 
   const refreshHistory = async () => {
@@ -24,6 +27,14 @@ function IndexPopup() {
   useEffect(() => {
     chrome.storage.local.get("askLlmEnabled").then((result) => {
       setEnabledState(result.askLlmEnabled !== false)
+    })
+
+    chrome.storage.local.get("askLlmApiKey").then((result) => {
+      const savedApiKey =
+        typeof result.askLlmApiKey === "string" ? result.askLlmApiKey : ""
+
+      setApiKey(savedApiKey)
+      setApiKeySaved(savedApiKey.length > 0)
     })
 
     refreshHistory()
@@ -37,6 +48,32 @@ function IndexPopup() {
   const handleClearHistory = async () => {
     await clearAskLlmHistory()
     setHistory([])
+  }
+
+  const handleSaveApiKey = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const nextApiKey = apiKey.trim()
+
+    if (!nextApiKey) {
+      await chrome.storage.local.remove("askLlmApiKey")
+      setApiKey("")
+      setApiKeySaved(false)
+      setApiKeyStatus("API key cleared.")
+      return
+    }
+
+    await chrome.storage.local.set({ askLlmApiKey: nextApiKey })
+    setApiKey(nextApiKey)
+    setApiKeySaved(true)
+    setApiKeyStatus("API key saved.")
+  }
+
+  const handleClearApiKey = async () => {
+    await chrome.storage.local.remove("askLlmApiKey")
+    setApiKey("")
+    setApiKeySaved(false)
+    setApiKeyStatus("API key cleared.")
   }
 
   return (
@@ -104,6 +141,81 @@ function IndexPopup() {
             </span>
           </div>
         </div>
+
+        <section
+          style={{
+            backgroundColor: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
+            padding: "12px 14px"
+          }}>
+          <form onSubmit={handleSaveApiKey} style={{ display: "grid", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                OpenAI API Key
+              </div>
+              <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
+                {apiKeySaved
+                  ? "Saved locally in this browser."
+                  : "Required before asking the LLM."}
+              </div>
+            </div>
+
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(event) => {
+                setApiKey(event.target.value)
+                setApiKeyStatus("")
+              }}
+              placeholder="sk-..."
+              autoComplete="off"
+              spellCheck={false}
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #dbe3ee",
+                borderRadius: 6,
+                color: "#111827",
+                fontSize: 13,
+                outline: "none",
+                padding: "9px 10px",
+                width: "100%"
+              }}
+              aria-label="OpenAI API key"
+            />
+
+            <div
+              style={{
+                alignItems: "center",
+                display: "flex",
+                gap: 8,
+                justifyContent: "space-between"
+              }}>
+              <span style={{ color: "#64748b", fontSize: 12, minHeight: 16 }}>
+                {apiKeyStatus}
+              </span>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleClearApiKey}
+                  disabled={!apiKey && !apiKeySaved}
+                  style={{
+                    ...secondaryButtonStyle,
+                    cursor:
+                      !apiKey && !apiKeySaved ? "not-allowed" : "pointer",
+                    opacity: !apiKey && !apiKeySaved ? 0.45 : 1
+                  }}>
+                  Clear
+                </button>
+                <button type="submit" style={primaryButtonStyle}>
+                  Save
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
 
         <section
           style={{
@@ -189,6 +301,30 @@ const iconButtonStyle = {
   lineHeight: 1,
   padding: 0,
   width: 30
+} as const
+
+const primaryButtonStyle = {
+  background: "#2563eb",
+  border: "1px solid #2563eb",
+  borderRadius: 6,
+  color: "#ffffff",
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 700,
+  height: 30,
+  padding: "0 12px"
+} as const
+
+const secondaryButtonStyle = {
+  background: "#f8fafc",
+  border: "1px solid #dbe3ee",
+  borderRadius: 6,
+  color: "#334155",
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 700,
+  height: 30,
+  padding: "0 12px"
 } as const
 
 function HistoryItem({ item }: { item: AskLlmHistoryItem }) {

@@ -49,12 +49,12 @@ async function sendAIRequest(text: string) {
   const endpoint =
     process.env.PLASMO_PUBLIC_LLM_ENDPOINT ??
     "https://api.openai.com/v1/chat/completions"
-  const apiKey = process.env.PLASMO_PUBLIC_LLM_API_KEY
+  const apiKey = await getApiKey()
   const model = process.env.PLASMO_PUBLIC_LLM_MODEL ?? "gpt-4o-mini"
 
   if (!apiKey && endpoint.includes("api.openai.com")) {
     throw new Error(
-      "Set PLASMO_PUBLIC_LLM_API_KEY in your env before asking the LLM."
+      "Add your OpenAI API key in the extension popup before asking the LLM."
     )
   }
 
@@ -101,4 +101,12 @@ async function sendAIRequest(text: string) {
   }
 
   return answer.trim()
+}
+
+async function getApiKey() {
+  const result = await chrome.storage.local.get("askLlmApiKey")
+  const savedApiKey =
+    typeof result.askLlmApiKey === "string" ? result.askLlmApiKey.trim() : ""
+
+  return savedApiKey || process.env.PLASMO_PUBLIC_LLM_API_KEY
 }
