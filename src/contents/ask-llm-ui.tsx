@@ -56,6 +56,29 @@ function getSelectionRect(selection: Selection) {
   return range.getClientRects()[0] ?? null
 }
 
+function isSelectionInsideBubble(
+  selection: Selection,
+  bubbleElement: HTMLDivElement | null
+) {
+  const anchorNode = selection.anchorNode
+  return Boolean(anchorNode && bubbleElement?.contains(anchorNode))
+}
+
+function getBubbleCoordinates(rect: DOMRect, bubbleWidth: number) {
+  const x = Math.min(
+    Math.max(rect.left, 12),
+    window.innerWidth - bubbleWidth - 12
+  )
+  const belowY = rect.bottom + 8
+  const aboveY = rect.top - 48
+  const y =
+    belowY > window.innerHeight - 48 && aboveY >= 12
+      ? aboveY
+      : Math.max(belowY, 12)
+
+  return { x, y }
+}
+
 function AskLlmUi() {
   const [bubble, setBubble] = useState<BubbleState>(initialBubbleState)
   const lastTextRef = useRef("")
@@ -81,7 +104,11 @@ function AskLlmUi() {
       const selection = window.getSelection()
       const selectedText = selection?.toString().trim() ?? ""
 
-      if (!selection || !selectedText) {
+      if (
+        !selection ||
+        !selectedText ||
+        isSelectionInsideBubble(selection, bubbleRef.current)
+      ) {
         hideBubble()
         return
       }
@@ -98,6 +125,7 @@ function AskLlmUi() {
       }
 
       const bubbleWidth = Math.min(340, window.innerWidth - 24)
+      const { x, y } = getBubbleCoordinates(rect, bubbleWidth)
 
       lastTextRef.current = selectedText
       setBubble({
@@ -106,11 +134,8 @@ function AskLlmUi() {
         isLoading: false,
         selectedText,
         visible: true,
-        x: Math.min(
-          Math.max(rect.left, 12),
-          window.innerWidth - bubbleWidth - 12
-        ),
-        y: Math.max(rect.bottom + 8, 12)
+        x,
+        y
       })
     }, 120)
   }, [bubble.visible, hideBubble])
@@ -177,13 +202,21 @@ function AskLlmUi() {
       }
     }
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        hideBubble()
+      }
+    }
+
     document.addEventListener("selectionchange", handleSelection)
     document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
 
     return () => {
       window.clearTimeout(timeoutRef.current)
       document.removeEventListener("selectionchange", handleSelection)
       document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
     }
   }, [handleSelection, hideBubble])
 

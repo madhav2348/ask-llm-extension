@@ -110,8 +110,12 @@ function IndexPopup() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
+            <button
+              type="button"
               onClick={() => setEnabled(!enabled)}
+              aria-checked={enabled}
+              aria-label="Enable Ask LLM"
+              role="switch"
               style={{
                 position: "relative",
                 width: 40,
@@ -120,7 +124,9 @@ function IndexPopup() {
                 backgroundColor: enabled ? "#3b82f6" : "#ccc",
                 cursor: "pointer",
                 transition: "background 0.2s",
-                flexShrink: 0
+                flexShrink: 0,
+                border: 0,
+                padding: 0
               }}>
               <div
                 style={{
@@ -135,7 +141,7 @@ function IndexPopup() {
                   transition: "transform 0.2s"
                 }}
               />
-            </div>
+            </button>
             <span style={{ fontSize: 12, color: "#64748b", width: 20 }}>
               {enabled ? "On" : "Off"}
             </span>
@@ -150,7 +156,9 @@ function IndexPopup() {
             boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
             padding: "12px 14px"
           }}>
-          <form onSubmit={handleSaveApiKey} style={{ display: "grid", gap: 10 }}>
+          <form
+            onSubmit={handleSaveApiKey}
+            style={{ display: "grid", gap: 10 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700 }}>
                 OpenAI API Key
@@ -203,8 +211,7 @@ function IndexPopup() {
                   disabled={!apiKey && !apiKeySaved}
                   style={{
                     ...secondaryButtonStyle,
-                    cursor:
-                      !apiKey && !apiKeySaved ? "not-allowed" : "pointer",
+                    cursor: !apiKey && !apiKeySaved ? "not-allowed" : "pointer",
                     opacity: !apiKey && !apiKeySaved ? 0.45 : 1
                   }}>
                   Clear
@@ -247,7 +254,7 @@ function IndexPopup() {
                 style={iconButtonStyle}
                 title="Refresh history"
                 aria-label="Refresh history">
-                R
+                Refresh
               </button>
               <button
                 type="button"
@@ -260,7 +267,7 @@ function IndexPopup() {
                 }}
                 title="Clear history"
                 aria-label="Clear history">
-                X
+                Clear
               </button>
             </div>
           </div>
@@ -294,13 +301,13 @@ const iconButtonStyle = {
   color: "#334155",
   cursor: "pointer",
   display: "inline-flex",
-  fontSize: 16,
+  fontSize: 11,
   fontWeight: 700,
   height: 30,
   justifyContent: "center",
   lineHeight: 1,
-  padding: 0,
-  width: 30
+  minWidth: 30,
+  padding: "0 8px"
 } as const
 
 const primaryButtonStyle = {

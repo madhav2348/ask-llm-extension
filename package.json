@@ -1,8 +1,8 @@
 {
   "name": "ask-llm",
-  "displayName": "Ask llm",
+  "displayName": "Ask LLM",
   "version": "0.0.1",
-  "description": "compressive llm extension tool",
+  "description": "Compressive LLM extension tool",
   "author": "Plasmo Corp. <foss@plasmo.com>",
   "scripts": {
     "dev": "plasmo dev",
