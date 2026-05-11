@@ -1,28 +1,19 @@
 import cssText from "data-text:~/styles.css"
 import { useEffect, useState } from "react"
 
-import {
-  clearAskLlmHistory,
-  getAskLlmHistory,
-  type AskLlmHistoryItem
-} from "./history"
-
 export const getStyle = () => {
   const style = document.createElement("style")
   style.textContent = cssText
   return style
 }
 
+const OFFICIAL_WEBSITE_URL = "https://ask-llm-extension.vercel.app"
+
 function IndexPopup() {
   const [enabled, setEnabledState] = useState(true)
   const [apiKey, setApiKey] = useState("")
   const [apiKeySaved, setApiKeySaved] = useState(false)
   const [apiKeyStatus, setApiKeyStatus] = useState("")
-  const [history, setHistory] = useState<AskLlmHistoryItem[]>([])
-
-  const refreshHistory = async () => {
-    setHistory(await getAskLlmHistory())
-  }
 
   useEffect(() => {
     chrome.storage.local.get("askLlmEnabled").then((result) => {
@@ -36,8 +27,6 @@ function IndexPopup() {
       setApiKey(savedApiKey)
       setApiKeySaved(savedApiKey.length > 0)
     })
-
-    refreshHistory()
   }, [])
 
   const setEnabled = async (value: boolean) => {
@@ -45,9 +34,12 @@ function IndexPopup() {
     await chrome.storage.local.set({ askLlmEnabled: value })
   }
 
-  const handleClearHistory = async () => {
-    await clearAskLlmHistory()
-    setHistory([])
+  const openWebsite = () => {
+    chrome.tabs.create({ url: OFFICIAL_WEBSITE_URL })
+  }
+
+  const openSettings = () => {
+    chrome.runtime.openOptionsPage()
   }
 
   const handleSaveApiKey = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -79,34 +71,68 @@ function IndexPopup() {
   return (
     <div
       style={{
-        background: "#f8fafc",
-        color: "#111827",
+        background: "#3b3b3b",
+        color: "#f5f5f5",
         fontFamily:
           "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
         margin: 0,
         minWidth: 340,
-        padding: 12
+        padding: 12,
+        border: 0
       }}>
       <div style={{ display: "grid", gap: 12 }}>
+        <header
+          style={{
+            alignItems: "center",
+            display: "flex",
+            gap: 10,
+            justifyContent: "space-between"
+          }}>
+          <button
+            type="button"
+            onClick={openWebsite}
+            style={logoButtonStyle}
+            title="Open Ask LLM website"
+            aria-label="Open Ask LLM website">
+            <img
+              src={chrome.runtime.getURL("assets/icon.png")}
+              alt=""
+              style={{
+                height: 28,
+                width: 28
+              }}
+            />
+            <span style={{ fontSize: 16, fontWeight: 800 }}>Ask LLM</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openSettings}
+            style={headerIconButtonStyle}
+            title="Settings"
+            aria-label="Settings">
+            <SettingsIcon />
+          </button>
+        </header>
+
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 14px",
-            backgroundColor: "#ffffff",
-            border: "1px solid #e5e7eb",
+            backgroundColor: "#242424",
+            border: "1px solid #4b4b4b",
             borderRadius: 8,
-            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
             gap: 24
           }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>
               Enable "Ask LLM"
             </div>
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+            {/*<div style={{ fontSize: 12, color: "#c7c7c7", marginTop: 2 }}>
               Query an AI model inline
-            </div>
+            </div>*/}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -121,7 +147,7 @@ function IndexPopup() {
                 width: 40,
                 height: 22,
                 borderRadius: 99,
-                backgroundColor: enabled ? "#3b82f6" : "#ccc",
+                backgroundColor: enabled ? "#f5f5f5" : "#666666",
                 cursor: "pointer",
                 transition: "background 0.2s",
                 flexShrink: 0,
@@ -136,13 +162,13 @@ function IndexPopup() {
                   top: 3,
                   left: 3,
                   borderRadius: "50%",
-                  backgroundColor: "#fff",
+                  backgroundColor: enabled ? "#3b3b3b" : "#f5f5f5",
                   transform: enabled ? "translateX(18px)" : "translateX(0)",
                   transition: "transform 0.2s"
                 }}
               />
             </button>
-            <span style={{ fontSize: 12, color: "#64748b", width: 20 }}>
+            <span style={{ fontSize: 12, color: "#c7c7c7", width: 20 }}>
               {enabled ? "On" : "Off"}
             </span>
           </div>
@@ -150,10 +176,9 @@ function IndexPopup() {
 
         <section
           style={{
-            backgroundColor: "#ffffff",
-            border: "1px solid #e5e7eb",
+            backgroundColor: "#242424",
+            border: "1px solid #4b4b4b",
             borderRadius: 8,
-            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
             padding: "12px 14px"
           }}>
           <form
@@ -163,7 +188,7 @@ function IndexPopup() {
               <div style={{ fontSize: 14, fontWeight: 700 }}>
                 OpenAI API Key
               </div>
-              <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>
+              <div style={{ color: "#c7c7c7", fontSize: 12, marginTop: 2 }}>
                 {apiKeySaved
                   ? "Saved locally in this browser."
                   : "Required before asking the LLM."}
@@ -181,14 +206,14 @@ function IndexPopup() {
               autoComplete="off"
               spellCheck={false}
               style={{
-                background: "#f8fafc",
-                border: "1px solid #dbe3ee",
+                background: "#3b3b3b",
+                border: "1px solid #5f5f5f",
                 borderRadius: 6,
-                color: "#111827",
+                color: "#f5f5f5",
                 fontSize: 13,
                 outline: "none",
                 padding: "9px 10px",
-                width: "100%"
+                width: "93%"
               }}
               aria-label="OpenAI API key"
             />
@@ -200,7 +225,7 @@ function IndexPopup() {
                 gap: 8,
                 justifyContent: "space-between"
               }}>
-              <span style={{ color: "#64748b", fontSize: 12, minHeight: 16 }}>
+              <span style={{ color: "#c7c7c7", fontSize: 12, minHeight: 16 }}>
                 {apiKeyStatus}
               </span>
 
@@ -223,82 +248,29 @@ function IndexPopup() {
             </div>
           </form>
         </section>
-
-        <section
-          style={{
-            backgroundColor: "#ffffff",
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
-            overflow: "hidden"
-          }}>
-          <div
-            style={{
-              alignItems: "center",
-              borderBottom: "1px solid #e5e7eb",
-              display: "flex",
-              justifyContent: "space-between",
-              padding: "10px 12px"
-            }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>History</div>
-              <div style={{ color: "#64748b", fontSize: 12 }}>
-                Last {history.length} saved asks
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                type="button"
-                onClick={refreshHistory}
-                style={iconButtonStyle}
-                title="Refresh history"
-                aria-label="Refresh history">
-                Refresh
-              </button>
-              <button
-                type="button"
-                onClick={handleClearHistory}
-                disabled={history.length === 0}
-                style={{
-                  ...iconButtonStyle,
-                  cursor: history.length === 0 ? "not-allowed" : "pointer",
-                  opacity: history.length === 0 ? 0.45 : 1
-                }}
-                title="Clear history"
-                aria-label="Clear history">
-                Clear
-              </button>
-            </div>
-          </div>
-
-          <div style={{ maxHeight: 360, overflowY: "auto" }}>
-            {history.length === 0 ? (
-              <div
-                style={{
-                  color: "#64748b",
-                  fontSize: 13,
-                  padding: 16,
-                  textAlign: "center"
-                }}>
-                Ask about selected text and it will appear here.
-              </div>
-            ) : (
-              history.map((item) => <HistoryItem key={item.id} item={item} />)
-            )}
-          </div>
-        </section>
       </div>
     </div>
   )
 }
 
-const iconButtonStyle = {
+const logoButtonStyle = {
   alignItems: "center",
-  background: "#f8fafc",
-  border: "1px solid #dbe3ee",
+  background: "transparent",
+  border: 0,
+  color: "#f5f5f5",
+  cursor: "pointer",
+  display: "inline-flex",
+  gap: 8,
+  lineHeight: 1,
+  padding: 0
+} as const
+
+const headerIconButtonStyle = {
+  alignItems: "center",
+  background: "#3b3b3b",
+  border: "1px solid #5f5f5f",
   borderRadius: 6,
-  color: "#334155",
+  color: "#f5f5f5",
   cursor: "pointer",
   display: "inline-flex",
   fontSize: 11,
@@ -311,10 +283,10 @@ const iconButtonStyle = {
 } as const
 
 const primaryButtonStyle = {
-  background: "#2563eb",
-  border: "1px solid #2563eb",
+  background: "#f5f5f5",
+  border: "1px solid #f5f5f5",
   borderRadius: 6,
-  color: "#ffffff",
+  color: "#3b3b3b",
   cursor: "pointer",
   fontSize: 12,
   fontWeight: 700,
@@ -323,10 +295,10 @@ const primaryButtonStyle = {
 } as const
 
 const secondaryButtonStyle = {
-  background: "#f8fafc",
-  border: "1px solid #dbe3ee",
+  background: "#3b3b3b",
+  border: "1px solid #5f5f5f",
   borderRadius: 6,
-  color: "#334155",
+  color: "#f5f5f5",
   cursor: "pointer",
   fontSize: 12,
   fontWeight: 700,
@@ -334,74 +306,22 @@ const secondaryButtonStyle = {
   padding: "0 12px"
 } as const
 
-function HistoryItem({ item }: { item: AskLlmHistoryItem }) {
-  const answer = item.error || item.answer || "No answer saved."
-  const host = getHostname(item.pageUrl)
-
+function SettingsIcon() {
   return (
-    <article
-      style={{
-        borderBottom: "1px solid #edf2f7",
-        display: "grid",
-        gap: 7,
-        padding: "11px 12px"
-      }}>
-      <div
-        style={{
-          alignItems: "center",
-          color: "#64748b",
-          display: "flex",
-          fontSize: 11,
-          gap: 8,
-          justifyContent: "space-between"
-        }}>
-        <span
-          style={{
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
-          }}
-          title={item.pageTitle || host}>
-          {item.pageTitle || host || "Saved ask"}
-        </span>
-        <time style={{ flexShrink: 0 }}>
-          {new Date(item.createdAt).toLocaleDateString(undefined, {
-            day: "numeric",
-            month: "short"
-          })}
-        </time>
-      </div>
-
-      <div style={{ color: "#111827", fontSize: 13, lineHeight: 1.35 }}>
-        {truncate(item.text, 120)}
-      </div>
-
-      <div
-        style={{
-          color: item.error ? "#991b1b" : "#475569",
-          fontSize: 12,
-          lineHeight: 1.4
-        }}>
-        {truncate(answer, 180)}
-      </div>
-    </article>
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="16">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   )
-}
-
-function truncate(value: string, limit: number) {
-  return value.length > limit ? `${value.slice(0, limit).trim()}...` : value
-}
-
-function getHostname(url?: string) {
-  if (!url) {
-    return ""
-  }
-
-  try {
-    return new URL(url).hostname
-  } catch {
-    return ""
-  }
 }
 
 export default IndexPopup

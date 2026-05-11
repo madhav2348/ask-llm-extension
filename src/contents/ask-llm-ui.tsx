@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { sendToBackground } from "@plasmohq/messaging"
 
-import { addAskLlmHistoryItem } from "~history"
+import { addAskLlmHistoryItem } from "../history"
 
 type AskLlmResponse = {
   answer?: string
@@ -30,15 +30,18 @@ const initialBubbleState: BubbleState = {
   y: 0
 }
 
+const DEBUG_PREFIX = "[Ask LLM]"
+const PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = { passive: true }
+const CAPTURE_PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
+  capture: true,
+  passive: true
+}
+const CAPTURE_EVENT_OPTIONS: AddEventListenerOptions = { capture: true }
+
 export const getStyle = () => {
   const style = document.createElement("style")
   style.textContent = cssText
   return style
-}
-
-async function getAskLlmEnabled() {
-  const result = await chrome.storage.local.get("askLlmEnabled")
-  return result.askLlmEnabled !== false
 }
 
 function getSelectionRect(selection: Selection) {
@@ -47,6 +50,25 @@ function getSelectionRect(selection: Selection) {
   }
 
   const range = selection.getRangeAt(0).cloneRange()
+  return getRangeRect(range)
+}
+
+function getActiveSelection() {
+  const selection = window.getSelection()
+  const selectedText = selection?.toString().trim() ?? ""
+
+  if (!selection || !selectedText || selection.rangeCount === 0) {
+    return null
+  }
+
+  return {
+    range: selection.getRangeAt(0).cloneRange(),
+    selection,
+    selectedText
+  }
+}
+
+function getRangeRect(range: Range) {
   const rect = range.getBoundingClientRect()
 
   if (rect.width > 0 || rect.height > 0) {
@@ -81,45 +103,102 @@ function getBubbleCoordinates(rect: DOMRect, bubbleWidth: number) {
 
 function AskLlmUi() {
   const [bubble, setBubble] = useState<BubbleState>(initialBubbleState)
+  const askLlmEnabledRef = useRef(true)
+  const bubbleVisibleRef = useRef(false)
   const lastTextRef = useRef("")
-  const timeoutRef = useRef<number>()
+  const positionFrameRef = useRef<number>()
+  const selectionFrameRef = useRef<number>()
   const bubbleRef = useRef<HTMLDivElement>(null)
+  const selectedRangeRef = useRef<Range | null>(null)
 
   const hideBubble = useCallback(() => {
+    if (!bubbleVisibleRef.current && !lastTextRef.current) {
+      return
+    }
+
+    console.debug(`${DEBUG_PREFIX} hiding bubble`)
+    bubbleVisibleRef.current = false
     lastTextRef.current = ""
+    selectedRangeRef.current = null
     setBubble(initialBubbleState)
   }, [])
 
-  const handleSelection = useCallback(() => {
-    window.clearTimeout(timeoutRef.current)
+  const updateBubblePosition = useCallback(() => {
+    if (!bubbleVisibleRef.current || !selectedRangeRef.current) {
+      return
+    }
 
-    timeoutRef.current = window.setTimeout(async () => {
-      const isEnabled = await getAskLlmEnabled()
+    const rect = getRangeRect(selectedRangeRef.current)
+
+    if (!rect) {
+      console.debug(`${DEBUG_PREFIX} position update skipped: no range rect`)
+      hideBubble()
+      return
+    }
+
+    const bubbleWidth = Math.min(340, window.innerWidth - 24)
+    const { x, y } = getBubbleCoordinates(rect, bubbleWidth)
+
+    console.debug(`${DEBUG_PREFIX} position updated`, { x, y })
+    setBubble((current) => ({
+      ...current,
+      x,
+      y
+    }))
+  }, [hideBubble])
+
+  const schedulePositionUpdate = useCallback(() => {
+    window.cancelAnimationFrame(positionFrameRef.current ?? 0)
+    positionFrameRef.current =
+      window.requestAnimationFrame(updateBubblePosition)
+  }, [updateBubblePosition])
+
+  const handleSelection = useCallback(() => {
+    window.cancelAnimationFrame(selectionFrameRef.current ?? 0)
+
+    selectionFrameRef.current = window.requestAnimationFrame(() => {
+      const isEnabled = askLlmEnabledRef.current
+      console.debug(`${DEBUG_PREFIX} selection changed`, { isEnabled })
 
       if (isEnabled === false) {
+        console.debug(`${DEBUG_PREFIX} selection ignored: feature disabled`)
         hideBubble()
         return
       }
 
-      const selection = window.getSelection()
-      const selectedText = selection?.toString().trim() ?? ""
+      const activeSelection = getActiveSelection()
+      const selection = activeSelection?.selection
+      const selectedText = activeSelection?.selectedText ?? ""
+      console.debug(`${DEBUG_PREFIX} selected text captured`, {
+        length: selectedText.length,
+        preview: selectedText.slice(0, 120)
+      })
 
       if (
         !selection ||
         !selectedText ||
         isSelectionInsideBubble(selection, bubbleRef.current)
       ) {
+        console.debug(`${DEBUG_PREFIX} selection ignored`, {
+          hasSelection: Boolean(selection),
+          hasText: Boolean(selectedText),
+          insideBubble: Boolean(
+            selection && isSelectionInsideBubble(selection, bubbleRef.current)
+          )
+        })
         hideBubble()
         return
       }
 
-      if (selectedText === lastTextRef.current && bubble.visible) {
+      if (selectedText === lastTextRef.current && bubbleVisibleRef.current) {
+        console.debug(`${DEBUG_PREFIX} selection ignored: unchanged`)
         return
       }
 
-      const rect = getSelectionRect(selection)
+      const rect = getRangeRect(activeSelection.range)
 
       if (!rect) {
+        console.debug(`${DEBUG_PREFIX} selection ignored: no selection rect`)
         hideBubble()
         return
       }
@@ -128,6 +207,13 @@ function AskLlmUi() {
       const { x, y } = getBubbleCoordinates(rect, bubbleWidth)
 
       lastTextRef.current = selectedText
+      selectedRangeRef.current = activeSelection.range
+      console.debug(`${DEBUG_PREFIX} showing ask button`, {
+        selectedTextLength: selectedText.length,
+        x,
+        y
+      })
+      bubbleVisibleRef.current = true
       setBubble({
         answer: "",
         error: "",
@@ -137,11 +223,29 @@ function AskLlmUi() {
         x,
         y
       })
-    }, 120)
-  }, [bubble.visible, hideBubble])
+    })
+  }, [hideBubble])
 
-  const handleAskLlm = async () => {
+  const handleSelectionFallback = useCallback(
+    (source: string) => {
+      console.debug(`${DEBUG_PREFIX} selection fallback event`, { source })
+      handleSelection()
+    },
+    [handleSelection]
+  )
+
+  const handleAskLlm = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    console.debug(`${DEBUG_PREFIX} ask button clicked`, {
+      hasSelectedText: Boolean(bubble.selectedText),
+      isLoading: bubble.isLoading,
+      selectedTextLength: bubble.selectedText.length
+    })
+
     if (!bubble.selectedText || bubble.isLoading) {
+      console.debug(`${DEBUG_PREFIX} ask click ignored`)
       return
     }
 
@@ -153,6 +257,10 @@ function AskLlmUi() {
     }))
 
     try {
+      console.debug(`${DEBUG_PREFIX} sending message to background`, {
+        textLength: bubble.selectedText.length
+      })
+
       const response = await sendToBackground<{ text: string }, AskLlmResponse>(
         {
           name: "ask-llm",
@@ -161,6 +269,11 @@ function AskLlmUi() {
           }
         }
       )
+
+      console.debug(`${DEBUG_PREFIX} received background response`, {
+        hasAnswer: Boolean(response.answer),
+        hasError: Boolean(response.error)
+      })
 
       await addAskLlmHistoryItem({
         answer: response.answer,
@@ -180,6 +293,10 @@ function AskLlmUi() {
       const message =
         error instanceof Error ? error.message : "Could not ask the LLM."
 
+      console.debug(`${DEBUG_PREFIX} background request failed`, {
+        message
+      })
+
       await addAskLlmHistoryItem({
         error: message,
         pageTitle: document.title,
@@ -196,29 +313,157 @@ function AskLlmUi() {
   }
 
   useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!bubbleRef.current?.contains(event.target as Node)) {
+    chrome.storage.local.get("askLlmEnabled").then((result) => {
+      askLlmEnabledRef.current = result.askLlmEnabled !== false
+      console.debug(`${DEBUG_PREFIX} enabled state loaded`, {
+        isEnabled: askLlmEnabledRef.current
+      })
+    })
+
+    const handleStorageChange = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== "local" || !changes.askLlmEnabled) {
+        return
+      }
+
+      askLlmEnabledRef.current = changes.askLlmEnabled.newValue !== false
+      console.debug(`${DEBUG_PREFIX} enabled state changed`, {
+        isEnabled: askLlmEnabledRef.current
+      })
+
+      if (!askLlmEnabledRef.current) {
         hideBubble()
       }
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!bubbleRef.current?.contains(event.target as Node)) {
+        console.debug(`${DEBUG_PREFIX} outside pointer down`)
+        hideBubble()
+        return
+      }
+
+      console.debug(`${DEBUG_PREFIX} pointer down inside bubble`)
+    }
+
+    const handlePointerUp = () => {
+      handleSelectionFallback("pointerup")
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        console.debug(`${DEBUG_PREFIX} escape pressed`)
         hideBubble()
       }
     }
 
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (
+        event.key === "Shift" ||
+        event.key.startsWith("Arrow") ||
+        event.key === "Home" ||
+        event.key === "End"
+      ) {
+        handleSelectionFallback(`keyup:${event.key}`)
+      }
+    }
+
+    const handleFocusChange = () => {
+      handleSelectionFallback("focus-change")
+    }
+
+    const handleScrollOrResize = () => {
+      if (bubbleVisibleRef.current) {
+        console.debug(`${DEBUG_PREFIX} scroll/resize detected`)
+        schedulePositionUpdate()
+      }
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChange)
     document.addEventListener("selectionchange", handleSelection)
-    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener(
+      "pointerdown",
+      handlePointerDown,
+      PASSIVE_EVENT_OPTIONS
+    )
+    document.addEventListener(
+      "pointerup",
+      handlePointerUp,
+      CAPTURE_PASSIVE_EVENT_OPTIONS
+    )
     document.addEventListener("keydown", handleKeyDown)
+    document.addEventListener(
+      "keyup",
+      handleKeyUp,
+      CAPTURE_PASSIVE_EVENT_OPTIONS
+    )
+    window.addEventListener("blur", handleFocusChange, CAPTURE_EVENT_OPTIONS)
+    window.addEventListener(
+      "scroll",
+      handleScrollOrResize,
+      CAPTURE_PASSIVE_EVENT_OPTIONS
+    )
+    window.addEventListener(
+      "resize",
+      handleScrollOrResize,
+      PASSIVE_EVENT_OPTIONS
+    )
+    document.addEventListener(
+      "scroll",
+      handleScrollOrResize,
+      CAPTURE_PASSIVE_EVENT_OPTIONS
+    )
 
     return () => {
-      window.clearTimeout(timeoutRef.current)
+      window.cancelAnimationFrame(selectionFrameRef.current ?? 0)
+      window.cancelAnimationFrame(positionFrameRef.current ?? 0)
+      chrome.storage.onChanged.removeListener(handleStorageChange)
       document.removeEventListener("selectionchange", handleSelection)
-      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener(
+        "pointerdown",
+        handlePointerDown,
+        PASSIVE_EVENT_OPTIONS
+      )
+      document.removeEventListener(
+        "pointerup",
+        handlePointerUp,
+        CAPTURE_PASSIVE_EVENT_OPTIONS
+      )
       document.removeEventListener("keydown", handleKeyDown)
+      document.removeEventListener(
+        "keyup",
+        handleKeyUp,
+        CAPTURE_PASSIVE_EVENT_OPTIONS
+      )
+      window.removeEventListener(
+        "blur",
+        handleFocusChange,
+        CAPTURE_EVENT_OPTIONS
+      )
+      window.removeEventListener(
+        "scroll",
+        handleScrollOrResize,
+        CAPTURE_PASSIVE_EVENT_OPTIONS
+      )
+      window.removeEventListener(
+        "resize",
+        handleScrollOrResize,
+        PASSIVE_EVENT_OPTIONS
+      )
+      document.removeEventListener(
+        "scroll",
+        handleScrollOrResize,
+        CAPTURE_PASSIVE_EVENT_OPTIONS
+      )
     }
-  }, [handleSelection, hideBubble])
+  }, [
+    handleSelection,
+    handleSelectionFallback,
+    hideBubble,
+    schedulePositionUpdate
+  ])
 
   if (!bubble.visible) {
     return null
@@ -235,7 +480,16 @@ function AskLlmUi() {
       <button
         className="ask-llm-button"
         disabled={bubble.isLoading}
-        onMouseDown={(event) => event.preventDefault()}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          console.debug(`${DEBUG_PREFIX} button pointer down`)
+        }}
+        onMouseDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          console.debug(`${DEBUG_PREFIX} button mouse down`)
+        }}
         onClick={handleAskLlm}>
         {bubble.isLoading ? "Asking..." : "Ask LLM"}
       </button>

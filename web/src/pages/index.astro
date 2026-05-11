@@ -1,0 +1,82 @@
+---
+import "../styles.css"
+
+const features = [
+  {
+    title: "Inline Asking",
+    body: "Ask about selected text directly from the current webpage."
+  },
+  {
+    title: "Local API Key",
+    body: "Your API key is saved in browser storage for extension use."
+  },
+  {
+    title: "History",
+    body: "Review recent asks from the extension settings page."
+  }
+]
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Ask LLM is a browser extension for asking an AI model about selected text." />
+    <title>Ask LLM</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Ask LLM home">
+        <img src="/icon.png" alt="" width="32" height="32" />
+        <span>Ask LLM</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Browser extension</p>
+          <h1>Ask LLM</h1>
+          <p class="lede">
+            Select text on any page and ask an AI model for a direct answer
+            without losing your place.
+          </p>
+          <a class="primary-link" href="#features">View Features</a>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="section-heading">
+          <h2>Features</h2>
+          <p>Focused tools for quick page-level questions.</p>
+        </div>
+        <div class="feature-grid">
+          {
+            features.map((feature) => (
+              <article>
+                <h3>{feature.title}</h3>
+                <p>{feature.body}</p>
+              </article>
+            ))
+          }
+        </div>
+      </section>
+
+      <section id="privacy" class="section privacy-section">
+        <div>
+          <h2>Privacy</h2>
+          <p>
+            Ask LLM keeps settings and history in local browser storage. The
+            extension sends selected text only when you choose to ask the model.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
