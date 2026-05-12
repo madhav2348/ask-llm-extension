@@ -103,7 +103,7 @@ function getBubbleCoordinates(rect: DOMRect, bubbleWidth: number) {
 
 function AskLlmUi() {
   const [bubble, setBubble] = useState<BubbleState>(initialBubbleState)
-  const askLlmEnabledRef = useRef(true)
+  const askLlmEnabledRef = useRef(false)
   const bubbleVisibleRef = useRef(false)
   const lastTextRef = useRef("")
   const positionFrameRef = useRef<number>()
@@ -314,7 +314,7 @@ function AskLlmUi() {
 
   useEffect(() => {
     chrome.storage.local.get("askLlmEnabled").then((result) => {
-      askLlmEnabledRef.current = result.askLlmEnabled !== false
+      askLlmEnabledRef.current = result.askLlmEnabled === true
       console.debug(`${DEBUG_PREFIX} enabled state loaded`, {
         isEnabled: askLlmEnabledRef.current
       })
@@ -328,7 +328,7 @@ function AskLlmUi() {
         return
       }
 
-      askLlmEnabledRef.current = changes.askLlmEnabled.newValue !== false
+      askLlmEnabledRef.current = changes.askLlmEnabled.newValue === true
       console.debug(`${DEBUG_PREFIX} enabled state changed`, {
         isEnabled: askLlmEnabledRef.current
       })
