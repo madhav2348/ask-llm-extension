@@ -1,3 +1,5 @@
+import "./styles.css"
+
 import cssText from "data-text:~/styles.css"
 import { useEffect, useState } from "react"
 
@@ -7,6 +9,22 @@ import {
   type AskLlmHistoryItem
 } from "./history"
 
+type SettingsSectionId = "api-key" | "history"
+
+const SETTINGS_SECTIONS: Array<{
+  id: SettingsSectionId
+  title: string
+}> = [
+  {
+    id: "api-key",
+    title: "API Key"
+  },
+  {
+    id: "history",
+    title: "History"
+  }
+]
+
 export const getStyle = () => {
   const style = document.createElement("style")
   style.textContent = cssText
@@ -15,9 +33,13 @@ export const getStyle = () => {
 
 function OptionsPage() {
   const [apiKey, setApiKey] = useState("")
+  const [savedApiKey, setSavedApiKey] = useState("")
   const [apiKeySaved, setApiKeySaved] = useState(false)
+  const [apiKeyEditing, setApiKeyEditing] = useState(false)
   const [apiKeyStatus, setApiKeyStatus] = useState("")
   const [history, setHistory] = useState<AskLlmHistoryItem[]>([])
+  const [activeSection, setActiveSection] =
+    useState<SettingsSectionId>("api-key")
 
   const refreshHistory = async () => {
     setHistory(await getAskLlmHistory())
@@ -29,7 +51,9 @@ function OptionsPage() {
         typeof result.askLlmApiKey === "string" ? result.askLlmApiKey : ""
 
       setApiKey(savedApiKey)
+      setSavedApiKey(savedApiKey)
       setApiKeySaved(savedApiKey.trim().length > 0)
+      setApiKeyEditing(false)
     })
 
     refreshHistory()
@@ -51,7 +75,9 @@ function OptionsPage() {
 
     await chrome.storage.local.set({ askLlmApiKey: nextApiKey })
     setApiKey(nextApiKey)
+    setSavedApiKey(nextApiKey)
     setApiKeySaved(true)
+    setApiKeyEditing(false)
     setApiKeyStatus("API key saved.")
   }
 
@@ -59,14 +85,30 @@ function OptionsPage() {
     await chrome.storage.local.remove("askLlmApiKey")
     await chrome.storage.local.set({ askLlmEnabled: false })
     setApiKey("")
+    setSavedApiKey("")
     setApiKeySaved(false)
+    setApiKeyEditing(false)
     setApiKeyStatus("API key cleared. Ask LLM was disabled.")
+  }
+
+  const handleEditApiKey = () => {
+    setApiKey(savedApiKey)
+    setApiKeyEditing(true)
+    setApiKeyStatus("")
+  }
+
+  const handleCancelApiKeyEdit = () => {
+    setApiKey(savedApiKey)
+    setApiKeyEditing(false)
+    setApiKeyStatus("")
   }
 
   const handleClearHistory = async () => {
     await clearAskLlmHistory()
     setHistory([])
   }
+
+  const showApiKeyForm = !apiKeySaved || apiKeyEditing
 
   return (
     <main className="ask-llm-options">
@@ -80,97 +122,172 @@ function OptionsPage() {
           </div>
         </header>
 
-        <section className="ask-llm-settings-card">
-          <form onSubmit={handleSaveApiKey} className="ask-llm-form">
-            <div>
-              <h2 className="ask-llm-section-title">OpenAI API Key</h2>
-              <div className="ask-llm-muted">
-                {apiKeySaved
-                  ? "Saved locally in this browser."
-                  : "Required before enabling Ask LLM."}
-              </div>
-            </div>
+        <div className="ask-llm-settings-layout">
+          <SettingsSidebar
+            activeSection={activeSection}
+            onSectionChange={setActiveSection}
+          />
 
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(event) => {
-                setApiKey(event.target.value)
-                setApiKeyStatus("")
-              }}
-              placeholder="sk-..."
-              autoComplete="off"
-              spellCheck={false}
-              className="ask-llm-input"
-              aria-label="OpenAI API key"
-            />
+          <div className="ask-llm-settings-content">
+            {activeSection === "api-key" ? (
+              <section className="ask-llm-settings-card">
+                {showApiKeyForm ? (
+                  <form onSubmit={handleSaveApiKey} className="ask-llm-form">
+                    <div>
+                      <h2 className="ask-llm-section-title">OpenAI API Key</h2>
+                      <div className="ask-llm-muted">
+                        {apiKeyEditing
+                          ? "Edit the saved key."
+                          : "Required before enabling Ask LLM."}
+                      </div>
+                    </div>
 
-            <div className="ask-llm-form-footer">
-              <span
-                className={`ask-llm-status${
-                  apiKeyStatus.includes("required") ? " is-error" : ""
-                }`}>
-                {apiKeyStatus}
-              </span>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => {
+                        setApiKey(event.target.value)
+                        setApiKeyStatus("")
+                      }}
+                      placeholder="sk-..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="ask-llm-input"
+                      aria-label="OpenAI API key"
+                    />
 
-              <div className="ask-llm-actions">
-                <button
-                  type="button"
-                  onClick={handleClearApiKey}
-                  disabled={!apiKey && !apiKeySaved}
-                  className="ask-llm-secondary-button">
-                  Clear
-                </button>
-                <button type="submit" className="ask-llm-primary-button">
-                  Save
-                </button>
-              </div>
-            </div>
-          </form>
-        </section>
+                    <div className="ask-llm-form-footer">
+                      <span
+                        className={`ask-llm-status${
+                          apiKeyStatus.includes("required") ? " is-error" : ""
+                        }`}>
+                        {apiKeyStatus}
+                      </span>
 
-        <section className="ask-llm-history-card">
-          <div className="ask-llm-card-header">
-            <div>
-              <h2 className="ask-llm-section-title">History</h2>
-              <div className="ask-llm-muted">
-                Last {history.length} saved asks
-              </div>
-            </div>
+                      <div className="ask-llm-actions">
+                        {apiKeyEditing ? (
+                          <button
+                            type="button"
+                            onClick={handleCancelApiKeyEdit}
+                            className="ask-llm-secondary-button">
+                            Cancel
+                          </button>
+                        ) : null}
+                        <button
+                          type="submit"
+                          className="ask-llm-primary-button">
+                          {apiKeyEditing ? "Update" : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="ask-llm-api-key-summary">
+                    <div>
+                      <h2 className="ask-llm-section-title">OpenAI API Key</h2>
+                      <div className="ask-llm-muted">
+                        Saved locally in this browser.
+                      </div>
+                    </div>
 
-            <div className="ask-llm-actions">
-              <button
-                type="button"
-                onClick={refreshHistory}
-                className="ask-llm-secondary-button"
-                title="Refresh history"
-                aria-label="Refresh history">
-                Refresh
-              </button>
-              <button
-                type="button"
-                onClick={handleClearHistory}
-                disabled={history.length === 0}
-                className="ask-llm-secondary-button"
-                title="Clear history"
-                aria-label="Clear history">
-                Clear
-              </button>
-            </div>
-          </div>
+                    <div className="ask-llm-saved-key-row">
+                      <span className="ask-llm-saved-key-label">Saved key</span>
+                    </div>
 
-          <div className="ask-llm-history-list">
-            {history.length === 0 ? (
-              <div className="ask-llm-empty-history">
-                Ask about selected text and it will appear here.
-              </div>
+                    <div className="ask-llm-form-footer">
+                      <span className="ask-llm-status">{apiKeyStatus}</span>
+
+                      <div className="ask-llm-actions">
+                        <button
+                          type="button"
+                          onClick={handleEditApiKey}
+                          className="ask-llm-secondary-button">
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearApiKey}
+                          className="ask-llm-secondary-button">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
             ) : (
-              history.map((item) => <HistoryItem key={item.id} item={item} />)
+              <section className="ask-llm-history-card">
+                <div className="ask-llm-card-header">
+                  <div>
+                    <h2 className="ask-llm-section-title">History</h2>
+                    <div className="ask-llm-muted">
+                      Last {history.length} saved asks
+                    </div>
+                  </div>
+
+                  <div className="ask-llm-actions">
+                    <button
+                      type="button"
+                      onClick={refreshHistory}
+                      className="ask-llm-secondary-button"
+                      title="Refresh history"
+                      aria-label="Refresh history">
+                      Refresh
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearHistory}
+                      disabled={history.length === 0}
+                      className="ask-llm-secondary-button"
+                      title="Clear history"
+                      aria-label="Clear history">
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="ask-llm-history-list">
+                  {history.length === 0 ? (
+                    <div className="ask-llm-empty-history">
+                      Ask about selected text and it will appear here.
+                    </div>
+                  ) : (
+                    history.map((item) => (
+                      <HistoryItem key={item.id} item={item} />
+                    ))
+                  )}
+                </div>
+              </section>
             )}
           </div>
-        </section>
+        </div>
       </div>
     </main>
+  )
+}
+
+function SettingsSidebar({
+  activeSection,
+  onSectionChange
+}: {
+  activeSection: SettingsSectionId
+  onSectionChange: (sectionId: SettingsSectionId) => void
+}) {
+  return (
+    <nav className="ask-llm-settings-sidebar" aria-label="Settings sections">
+      {SETTINGS_SECTIONS.map((section) => (
+        <button
+          key={section.id}
+          type="button"
+          className={`ask-llm-sidebar-link${
+            activeSection === section.id ? " is-active" : ""
+          }`}
+          onClick={() => onSectionChange(section.id)}
+          aria-current={activeSection === section.id ? "page" : undefined}>
+          <span className="ask-llm-sidebar-title">{section.title}</span>
+        </button>
+      ))}
+    </nav>
   )
 }
 
