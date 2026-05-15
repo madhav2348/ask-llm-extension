@@ -31,6 +31,7 @@ const initialBubbleState: BubbleState = {
 }
 
 const DEBUG_PREFIX = "[Ask LLM]"
+const LOADING_PREVIEW_MS = 2000
 const PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = { passive: true }
 const CAPTURE_PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
   capture: true,
@@ -99,6 +100,12 @@ function getBubbleCoordinates(rect: DOMRect, bubbleWidth: number) {
       : Math.max(belowY, 12)
 
   return { x, y }
+}
+
+function waitForLoadingPreview() {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, LOADING_PREVIEW_MS)
+  })
 }
 
 function AskLlmUi() {
@@ -256,6 +263,8 @@ function AskLlmUi() {
       isLoading: true
     }))
 
+    const loadingPreview = waitForLoadingPreview()
+
     try {
       console.debug(`${DEBUG_PREFIX} sending message to background`, {
         textLength: bubble.selectedText.length
@@ -269,6 +278,8 @@ function AskLlmUi() {
           }
         }
       )
+
+      await loadingPreview
 
       console.debug(`${DEBUG_PREFIX} received background response`, {
         hasAnswer: Boolean(response.answer),
@@ -290,6 +301,8 @@ function AskLlmUi() {
         isLoading: false
       }))
     } catch (error) {
+      await loadingPreview
+
       const message =
         error instanceof Error ? error.message : "Could not ask the LLM."
 
@@ -472,7 +485,9 @@ function AskLlmUi() {
   return (
     <div
       ref={bubbleRef}
-      className="ask-llm-bubble"
+      className={`ask-llm-bubble${
+        bubble.isLoading || bubble.answer || bubble.error ? " is-expanded" : ""
+      }`}
       style={{
         left: bubble.x,
         top: bubble.y
@@ -491,8 +506,20 @@ function AskLlmUi() {
           console.debug(`${DEBUG_PREFIX} button mouse down`)
         }}
         onClick={handleAskLlm}>
-        {bubble.isLoading ? "Asking..." : "Ask LLM"}
+        {bubble.isLoading ? "Loading" : "Ask LLM"}
       </button>
+
+      {bubble.isLoading && (
+        <div className="ask-llm-loading" role="status" aria-live="polite">
+          <span className="ask-llm-loading-spinner" aria-hidden="true" />
+          <span className="ask-llm-loading-copy">
+            <span className="ask-llm-loading-title">Checking meta context</span>
+            <span className="ask-llm-loading-detail">
+              Preparing the selected text for the LLM.
+            </span>
+          </span>
+        </div>
+      )}
 
       {(bubble.answer || bubble.error) && (
         <div className={bubble.error ? "ask-llm-error" : "ask-llm-answer"}>
